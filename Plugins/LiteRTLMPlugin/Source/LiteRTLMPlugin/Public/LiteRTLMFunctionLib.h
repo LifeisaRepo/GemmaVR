@@ -37,5 +37,22 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "LiteRTLM")
     static void ShutdownLM();
-	
+
+    UFUNCTION(BlueprintCallable, Category = "LiteRT|STT")
+    static void InitSTT();
+
+    UFUNCTION(BlueprintCallable, Category = "LiteRT|STT")
+    static void StartSTT();
+
+    UFUNCTION(BlueprintCallable, Category = "LiteRT|STT")
+    static void StopSTT();
+
+    UFUNCTION(BlueprintCallable, Category = "LiteRT|Lifecycle")
+    static void ShutdownAIServices();
 };
+
+#if PLATFORM_ANDROID
+extern "C" {
+    JNIEXPORT void JNICALL Java_com_epicgames_unreal_GameActivity_nativeOnSTTResult(JNIEnv* jenv, jobject thiz, jstring jtext);
+}
+#endif

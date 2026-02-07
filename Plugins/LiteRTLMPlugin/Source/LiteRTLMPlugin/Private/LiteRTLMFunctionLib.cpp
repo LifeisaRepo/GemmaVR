@@ -11,7 +11,23 @@
 #include "Android/AndroidJava.h"
 #include "Android/AndroidJNI.h"
 #include "Android/AndroidApplication.h"
+
+JNIEXPORT void JNICALL Java_com_epicgames_unreal_GameActivity_nativeOnSTTResult(JNIEnv* jenv, jobject thiz, jstring jtext)
+{
+    FString RecognizedText = FJavaHelper::FStringFromParam(jenv, jtext);
+
+    // Use AsyncTask to ensure we return to the GameThread before calling Unreal functions
+    AsyncTask(ENamedThreads::GameThread, [RecognizedText]()
+        {
+            UE_LOG(LogTemp, Log, TEXT("LiteRT-STT: %s"), *RecognizedText);
+
+            // Pass the speech directly to your existing Gemma generation function
+            // ULiteRTLMFunctionLibrary::GenerateLMResponseAsync(RecognizedText);
+        });
+}
+
 #endif
+
 
 void ULiteRTLMFunctionLib::InitializeLM(FString ModelPath)
 {
@@ -159,6 +175,45 @@ void ULiteRTLMFunctionLib::ShutdownLM()
         static jmethodID CloseMethod = FJavaWrapper::FindMethod(Env,
             FJavaWrapper::GameActivityClassID, "AndroidThunkJava_CloseConnection", "()V", false);
         FJavaWrapper::CallVoidMethod(Env, FJavaWrapper::GameActivityThis, CloseMethod);
+    }
+#endif
+}
+
+void ULiteRTLMFunctionLib::InitSTT()
+{
+#if PLATFORM_ANDROID
+    if (JNIEnv* Env = FAndroidApplication::GetJavaEnv())
+    {
+        static jmethodID InitMethod = FJavaWrapper::FindMethod(Env, FJavaWrapper::GameActivityClassID, "AndroidThunkJava_InitSTT", "()V", false);
+        FJavaWrapper::CallVoidMethod(Env, FJavaWrapper::GameActivityObject, InitMethod);
+    }
+#endif
+}
+
+void ULiteRTLMFunctionLib::StartSTT() {
+#if PLATFORM_ANDROID
+    if (JNIEnv* Env = FAndroidApplication::GetJavaEnv()) {
+        static jmethodID Method = FJavaWrapper::FindMethod(Env, FJavaWrapper::GameActivityClassID, "AndroidThunkJava_StartListening", "()V", false);
+        FJavaWrapper::CallVoidMethod(Env, FJavaWrapper::GameActivityObject, Method);
+    }
+#endif
+}
+
+void ULiteRTLMFunctionLib::StopSTT() {
+#if PLATFORM_ANDROID
+    if (JNIEnv* Env = FAndroidApplication::GetJavaEnv()) {
+        static jmethodID Method = FJavaWrapper::FindMethod(Env, FJavaWrapper::GameActivityClassID, "AndroidThunkJava_StopListening", "()V", false);
+        FJavaWrapper::CallVoidMethod(Env, FJavaWrapper::GameActivityObject, Method);
+    }
+#endif
+}
+
+
+void ULiteRTLMFunctionLib::ShutdownAIServices() {
+#if PLATFORM_ANDROID
+    if (JNIEnv* Env = FAndroidApplication::GetJavaEnv()) {
+        static jmethodID Method = FJavaWrapper::FindMethod(Env, FJavaWrapper::GameActivityClassID, "AndroidThunkJava_ShutdownAll", "()V", false);
+        FJavaWrapper::CallVoidMethod(Env, FJavaWrapper::GameActivityObject, Method);
     }
 #endif
 }

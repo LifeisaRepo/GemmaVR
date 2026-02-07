@@ -27,127 +27,235 @@
 			<uses-native-library android:name="libvndksupport.so" android:required="false"/>
 			<uses-native-library android:name="libOpenCL.so" android:required="false"/>
 		</addElements>
+    <addPermission android:name="android.permission.RECORD_AUDIO" />
+    <addElements tag="manifest">
+      <queries>
+        <intent>
+          <action android:name="android.intent.action.RECOGNIZE_SPEECH" />
+        </intent>
+      </queries>
+    </addElements>
 	</androidManifestUpdates>
 
 	<gameActivityImportAdditions>
 		<insert>
-			import com.google.ai.edge.litertlm.Content;
-			import com.google.ai.edge.litertlm.Message;
-		</insert>
+      // LiteRTLM Includes
+      import com.google.ai.edge.litertlm.Content;
+      import com.google.ai.edge.litertlm.Message;
+
+      // STT Includes
+      import android.speech.RecognitionListener;
+      import android.speech.RecognizerIntent;
+      import android.speech.SpeechRecognizer;
+      import android.content.Intent;
+      import android.os.Bundle;
+      import java.util.ArrayList;
+
+    </insert>
 	</gameActivityImportAdditions>
 
 	<gameActivityClassAdditions>
 		<insert>
-			private com.google.ai.edge.litertlm.Engine lmEngine;
-			private com.google.ai.edge.litertlm.Conversation lmConversation;
-			private com.google.ai.edge.litertlm.Message lmMessage;
+      private com.google.ai.edge.litertlm.Engine lmEngine;
+      private com.google.ai.edge.litertlm.Conversation lmConversation;
+      private com.google.ai.edge.litertlm.Message lmMessage;
+
+      public void AndroidThunkJava_InitWithFunctions(String modelPath) {
+      try {
+      com.google.ai.edge.litertlm.Backend gpu = com.google.ai.edge.litertlm.Backend.GPU;
+      com.google.ai.edge.litertlm.Backend cpu = com.google.ai.edge.litertlm.Backend.CPU;
+
+      com.google.ai.edge.litertlm.EngineConfig config = new com.google.ai.edge.litertlm.EngineConfig(
+      modelPath,              // 1. String: Model Path
+      cpu,                    // 2. Backend: Base Backend
+      null,                    // 3. Backend: Prefill Backend
+      null,                    // 4. Backend: Decode Backend
+      512,                   // 5. Integer: Max Context Length
+      getCacheDir().getPath() // 6. String: Cache Directory Path
+      );
+
+      lmEngine = new com.google.ai.edge.litertlm.Engine(config);
+      lmEngine.initialize();
+
+      com.google.ai.edge.litertlm.SamplerConfig sampler = new com.google.ai.edge.litertlm.SamplerConfig(40, 0.95, 0.1, 128);
+      String systemPrompt = "You are a model that can do function calling. " +
+      "Tools: [go_forward(), go_backward(), go_left(), go_right()]";
+
+      com.google.ai.edge.litertlm.ConversationConfig convConfig = new com.google.ai.edge.litertlm.ConversationConfig(
+      com.google.ai.edge.litertlm.Message.Companion.of(systemPrompt),
+      java.util.Collections.emptyList(),
+      sampler);
+      lmConversation = lmEngine.createConversation(convConfig);
+
+      android.util.Log.d("LiteRT-LM", "Engine and Conversation Initialized");
+
+      } catch (Exception e) {
+      android.util.Log.e("LiteRT-LM", "Initialization failed: " + e.getMessage());
+      }
+      }
+
+      public String AndroidThunkJava_GenerateResponse(String prompt) {
+      if (lmEngine == null || lmConversation == null) {
+      return "Error: Engine not initialized";
+      }
+
+      try {
 
 
+      String aiResult = lmConversation.sendMessage(lmMessage.Companion.of(prompt)).toString();
 
-			public void AndroidThunkJava_InitWithFunctions(String modelPath) {
-			try {
-			com.google.ai.edge.litertlm.Backend gpu = com.google.ai.edge.litertlm.Backend.GPU;
-			com.google.ai.edge.litertlm.Backend cpu = com.google.ai.edge.litertlm.Backend.CPU;
-
-			com.google.ai.edge.litertlm.EngineConfig config = new com.google.ai.edge.litertlm.EngineConfig(
-			modelPath,              // 1. String: Model Path
-			cpu,                    // 2. Backend: Base Backend
-			null,                    // 3. Backend: Prefill Backend
-			null,                    // 4. Backend: Decode Backend
-			512,                   // 5. Integer: Max Context Length
-			getCacheDir().getPath() // 6. String: Cache Directory Path
-			);
-
-			lmEngine = new com.google.ai.edge.litertlm.Engine(config);
-			lmEngine.initialize();
-
-			com.google.ai.edge.litertlm.SamplerConfig sampler = new com.google.ai.edge.litertlm.SamplerConfig(40, 0.95, 0.1, 128);
-			String systemPrompt = "You are a model that can do function calling. " +
-			"Tools: [go_forward(), go_backward(), go_left(), go_right()]";
-
-			com.google.ai.edge.litertlm.ConversationConfig convConfig = new com.google.ai.edge.litertlm.ConversationConfig(
-			com.google.ai.edge.litertlm.Message.Companion.of(systemPrompt),
-			java.util.Collections.emptyList(),
-			sampler);
-			lmConversation = lmEngine.createConversation(convConfig);
-
-			android.util.Log.d("LiteRT-LM", "Engine and Conversation Initialized");
-
-			} catch (Exception e) {
-			android.util.Log.e("LiteRT-LM", "Initialization failed: " + e.getMessage());
-			}
-			}
-
-			public String AndroidThunkJava_GenerateResponse(String prompt) {
-			if (lmEngine == null || lmConversation == null) {
-			return "Error: Engine not initialized";
-			}
-
-			try {
+      return aiResult;
+      } catch (Exception e) {
+      return "Error during generation: " + e.getMessage();
+      }
+      }
 
 
-			String aiResult = lmConversation.sendMessage(lmMessage.Companion.of(prompt)).toString();
+      public void AndroidThunkJava_SubmitFunctionResult(String functionName, String resultJson) {
+      String toolMessage = "response:" + functionName + resultJson;
+      lmConversation.sendMessage(com.google.ai.edge.litertlm.Message.Companion.of(toolMessage));
+      }
 
-			return aiResult;
-			} catch (Exception e) {
-			return "Error during generation: " + e.getMessage();
-			}
-			}
+      public void AndroidThunkJava_ResetConversation() {
+      lmConversation.close();
+      com.google.ai.edge.litertlm.SamplerConfig sampler = new com.google.ai.edge.litertlm.SamplerConfig(40, 0.95, 0.1, 128);
+      String systemPrompt = "You are a model that can do function calling. " +
+      "Tools: [go_forward(), go_backward(), go_left(), go_right()]";
 
+      com.google.ai.edge.litertlm.ConversationConfig convConfig = new com.google.ai.edge.litertlm.ConversationConfig(
+      com.google.ai.edge.litertlm.Message.Companion.of(systemPrompt),
+      java.util.Collections.emptyList(),
+      sampler);
+      lmConversation = lmEngine.createConversation(convConfig);
+      }
 
-			public void AndroidThunkJava_SubmitFunctionResult(String functionName, String resultJson) {
-			String toolMessage = "response:" + functionName + resultJson;
-			lmConversation.sendMessage(com.google.ai.edge.litertlm.Message.Companion.of(toolMessage));
-			}
+      public void AndroidThunkJava_CloseConnection() {
+      if (lmEngine != null || lmConversation != null) {
+      lmEngine.close();
+      lmConversation.close();
+      }
 
-			public void AndroidThunkJava_ResetConversation() {
-			lmConversation.close();
-			com.google.ai.edge.litertlm.SamplerConfig sampler = new com.google.ai.edge.litertlm.SamplerConfig(40, 0.95, 0.1, 128);
-			String systemPrompt = "You are a model that can do function calling. " +
-			"Tools: [go_forward(), go_backward(), go_left(), go_right()]";
-
-			com.google.ai.edge.litertlm.ConversationConfig convConfig = new com.google.ai.edge.litertlm.ConversationConfig(
-			com.google.ai.edge.litertlm.Message.Companion.of(systemPrompt),
-			java.util.Collections.emptyList(),
-			sampler);
-			lmConversation = lmEngine.createConversation(convConfig);
-			}
-
-			public void AndroidThunkJava_CloseConnection() {
-			if (lmEngine != null || lmConversation != null) {
-			lmEngine.close();
-			lmConversation.close();
-			}
-
-			}
+      }
 
 
-			private String copyAssetToInternal(String fileName) {
-			java.io.File file = new java.io.File(getFilesDir(), fileName);
-			if (!file.exists()) {
-			try (java.io.InputStream is = getAssets().open(fileName);
-			java.io.OutputStream os = new java.io.FileOutputStream(file)) {
-			byte[] buffer = new byte[1024];
-			int length;
-			while ((length = is.read(buffer)) > 0) {
-			os.write(buffer, 0, length);
-			}
-			android.util.Log.d("LiteRT-LM", "Model copied to: " + file.getAbsolutePath());
-			} catch (java.io.IOException e) {
-			android.util.Log.e("LiteRT-LM", "Failed to copy asset: " + e.getMessage());
-			return null;
-			}
-			}
-			return file.getAbsolutePath();
-			}
+      private String copyAssetToInternal(String fileName) {
+      java.io.File file = new java.io.File(getFilesDir(), fileName);
+      if (!file.exists()) {
+      try (java.io.InputStream is = getAssets().open(fileName);
+      java.io.OutputStream os = new java.io.FileOutputStream(file)) {
+      byte[] buffer = new byte[1024];
+      int length;
+      while ((length = is.read(buffer)) > 0) {
+      os.write(buffer, 0, length);
+      }
+      android.util.Log.d("LiteRT-LM", "Model copied to: " + file.getAbsolutePath());
+      } catch (java.io.IOException e) {
+      android.util.Log.e("LiteRT-LM", "Failed to copy asset: " + e.getMessage());
+      return null;
+      }
+      }
+      return file.getAbsolutePath();
+      }
 
-			public void AndroidThunkJava_InitWithAssetName(String assetName) {
-			String internalPath = copyAssetToInternal(assetName);
-			if (internalPath != null) {
-			AndroidThunkJava_InitWithFunctions(internalPath);
-			}
-			}
+      public void AndroidThunkJava_InitWithAssetName(String assetName) {
+      String internalPath = copyAssetToInternal(assetName);
+      if (internalPath != null) {
+      AndroidThunkJava_InitWithFunctions(internalPath);
+      }
+      }
 
-		</insert>
+      private SpeechRecognizer speechRecognizer;
+      private Intent recognizerIntent;
+      private boolean isListening = false;
+
+      public native void nativeOnSTTResult(String text);
+
+      public void AndroidThunkJava_InitSTT() {
+      _activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+      if (SpeechRecognizer.isRecognitionAvailable(_activity)) {
+      speechRecognizer = SpeechRecognizer.createSpeechRecognizer(_activity);
+      recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+      recognizerIntent.putExtra(RecognizerIntent.LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+      // Ensures the engine stays active while the button is held
+      recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+
+      speechRecognizer.setRecognitionListener(new RecognitionListener() {
+      @Override
+      public void onResults(Bundle results) {
+      ArrayList&lt;String&gt; matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+      if (matches != null &amp;&amp; !matches.isEmpty() &amp;&amp; isListening) {
+      nativeOnSTTResult(matches.get(0));
+      }
+      isListening = false;
+      }
+      @Override public void onError(int error) { isListening = false; }
+      // Stub other required methods...
+      @Override public void onReadyForSpeech(Bundle params) {}
+      @Override public void onBeginningOfSpeech() {}
+      @Override public void onRmsChanged(float rmsdB) {}
+      @Override public void onBufferReceived(byte[] buffer) {}
+      @Override public void onEndOfSpeech() {}
+      @Override public void onPartialResults(Bundle partialResults) {}
+      @Override public void onEvent(int eventType, Bundle params) {}
+      });
+      }
+      }
+      });
+      }
+
+      public void AndroidThunkJava_StartListening() {
+      _activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+      if (speechRecognizer != null) {
+      isListening = true;
+      speechRecognizer.startListening(recognizerIntent);
+      }
+      }
+      });
+      }
+
+      public void AndroidThunkJava_StopListening() {
+      _activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+      if (speechRecognizer != null) {
+      // This triggers onResults immediately with whatever was heard
+      speechRecognizer.stopListening();
+      }
+      }
+      });
+      }
+
+      public void AndroidThunkJava_ShutdownAll() {
+      _activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+      // 1. Shutdown Speech Recognizer
+      if (speechRecognizer != null) {
+      speechRecognizer.stopListening();
+      speechRecognizer.cancel();
+      speechRecognizer.destroy();
+      speechRecognizer = null;
+      }
+
+      // 2. Shutdown LiteRT-LM (using your existing CloseConnection logic)
+      if (lmEngine != null) {
+      lmEngine.close();
+      lmEngine = null;
+      }
+      if (lmConversation != null) {
+      lmConversation.close();
+      lmConversation = null;
+      }
+
+      android.util.Log.d("GemmaVR", "All AI services safely shutdown.");
+      }
+      });
+      }
+
+    </insert>
 	</gameActivityClassAdditions>
 </root>
